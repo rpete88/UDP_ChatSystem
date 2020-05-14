@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 				/*send to server*/
 				if( sendto(sock, chatBuffer, chatStringLen, 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr))!= chatStringLen)
 					DieWithError("sendto() sent a different number of bytes than expected");
-				printf("%s: %s\n", usernames[0], chatBuffer);
+				printf("%s: %s", usernames[0], chatBuffer); /* new line character should already be in chatBuffer */
 			}
 			else if ( FD_ISSET(sock, &rfds) ) { /* we have received message from server */
 				if( (recvMsgLen = recvfrom(sock, chatBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&fromAddr, &fromSize)) <0)
