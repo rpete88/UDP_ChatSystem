@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
 	FILE *f; /* pointer to a file */
 	char fileBuffer[MSGMAX+1];
 	int isOpen; /* used to make sure file closes */
+	int fileFlag;
 	char *usernames[3]; /*array of pointers to all usernames */
 	char USERNAMES[3][USERMAX]; /*array of all usernames */
 	int i; 	/* counter */
@@ -169,7 +170,7 @@ int main(int argc, char *argv[])
 					f = fopen( (fileName = strtok(NULL, "")), "r"); /* open file of next argument for reading */
 					isOpen = 1;
 					if( !f ) { /*if we have a NULL pointer, file was not able to be opened */
-						printf("Error: could not open file");
+						DieWithError("Error: could not open file");
 						isOpen = 0;
 					}
 					else { /*if we have opened a file for reading, send contents to server */
@@ -177,6 +178,7 @@ int main(int argc, char *argv[])
 						/* send server initial message indicating start of file transfer */
 						strcpy(fileBuffer, "fileTransfer "); 
 						strcat(fileBuffer, fileName);
+						strcat(fileBuffer, " ");
 						if( sendto(sock, fileBuffer, strlen(fileBuffer), 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr)) <0) {
 							DieWithError("Initial fileTransfer message failed to send()");
 						memset(fileBuffer, '\0', sizeof(fileBuffer));
@@ -217,9 +219,36 @@ int main(int argc, char *argv[])
 					chatBuffer[USERMAX+MSGMAX+1] = '\0';
 					/* separate username of sender */
 					senderUsername = strtok(chatBuffer, "\n");
-					recvChatMsg = strtok(NULL, "\n"); 
-					/* print username of sender and received chat message */
-					printf("%s: %s\n", senderUsername, recvChatMsg);
+					if( !strcmp(senderUsername, "fileTransfer") ) {
+						fileName = strtok(NULL, " ");
+						f= fopen(fileName, "w");
+						isOpen = 1;
+						fileFlag = 1;
+						if(!f) {
+							DieWithError("Could not open file for writing");
+							isOpen = 0;
+						}
+						else {
+							while(fileFlag) {
+								memset(chatBuffer, '\0', sizeof(chatBuffer));
+								if( recvfrom(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)&fromAddr, &fromSize) < 0) 
+									DieWithError("Error receiving file contents");
+								if( !strcmp( strtok(chatBuffer, " "), "closeFile") ) {
+									fileFlag = 0;
+								fprintf(f, chatBuffer);
+							}
+						}
+						if(isOpen) {
+							fclose(f);
+							isOpen = 0;
+						}
+						printf("Received file %s\n", fileName);
+					}
+					else {
+						recvChatMsg = strtok(NULL, "\n"); 
+						/* print username of sender and received chat message */
+						printf("%s: %s\n", senderUsername, recvChatMsg);
+					}
 				}
 			}
 		}
