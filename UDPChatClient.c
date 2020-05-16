@@ -37,6 +37,10 @@ int main(int argc, char *argv[])
 	char usernameBuffer[3*USERMAX +1]; /* Buffer to hold all usernames returned by server */
 	char chatBuffer[USERMAX+ MSGMAX +1];	/* Buffer to hold message contents sent by server */
 	char *username; /*initial username attempt*/
+	char *fileName; /*pointer to first part of message, to check for file transfer */
+	FILE *f; /* pointer to a file */
+	char fileBuffer[MSGMAX+1];
+	int isOpen; /* used to make sure file closes */
 	char *usernames[3]; /*array of pointers to all usernames */
 	char USERNAMES[3][USERMAX]; /*array of all usernames */
 	int i; 	/* counter */
@@ -142,7 +146,7 @@ int main(int argc, char *argv[])
 		 *		<username>\n<usernameList>	- if server is allowing user into chatroom (usernameList is separated with /n)
 		 *		<newUser>\n"has entered the chat"	- if server is informing other users of a new member
 		 */
-
+		isOpen = 0;
 		FD_SET(0, &rfds); /* watch stdin (fd 0) to see when it has input */
 		FD_SET(sock, &rfds); /* watch for socket */
 		retval = select(sock+1, &rfds, NULL, NULL, &timer);
@@ -160,8 +164,42 @@ int main(int argc, char *argv[])
 				chatBuffer[USERMAX+MSGMAX+1] = '\0'; /* Null terminate message */
 				chatStringLen = strlen(chatBuffer);
 				chatBuffer[chatStringLen] ='\0';
-				/*send to server*/
-				if( sendto(sock, chatBuffer, chatStringLen, 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr))!= chatStringLen)
+				fileName = strtok(chatBuffer, " ");
+				if( !strcmp( fileName, "fileTransfer") ) { /* if the first part of the message is 'fileTransfer' */
+					f = fopen( (fileName = strtok(NULL, "")), "r"); /* open file of next argument for reading */
+					isOpen = 1;
+					if( !f ) { /*if we have a NULL pointer, file was not able to be opened */
+						printf("Error: could not open file");
+						isOpen = 0;
+					}
+					else { /*if we have opened a file for reading, send contents to server */
+						memset(fileBuffer, '\0', sizeof(fileBuffer));
+						/* send server initial message indicating start of file transfer */
+						strcpy(fileBuffer, "fileTransfer "); 
+						strcat(fileBuffer, fileName);
+						if( sendto(sock, fileBuffer, strlen(fileBuffer), 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr)) <0) {
+							DieWithError("Initial fileTransfer message failed to send()");
+						memset(fileBuffer, '\0', sizeof(fileBuffer));
+						/* continuously read from file, and send to server */
+						while(fgets(fileBuffer, sizeof(fileBuffer), f) != NULL) {
+							if(sendto(sock, fileBuffer, strlen(fileBuffer), 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr)) != strlen(fileBuffer))
+								DieWithError("Sending file contents failed by sending incorrect number of bytes");
+							memet(fileBuffer, '\0', sizeof(fileBuffer);
+						}
+						/* send server final message indicating end of file transfer */
+						strcpy(fileBuffer, "closeFile");
+						strcat(fileBuffer, fileName);
+						if( sendto(sock, fileBuffer, strlen(fileBuffer), 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr)) <0) {
+							DieWithError("Final fileTransfer message failed to send()");
+						memset(fileBuffer, '\0', sizeof(fileBuffer));
+					}
+					if(isOpen) { /*close the file */
+						fclose(f);
+					       isOpen = 0;	
+					}
+				}
+				/*send message contents to server*/
+				else if( sendto(sock, chatBuffer, chatStringLen, 0, (struct sockaddr *)&chatServAddr, sizeof(chatServAddr))!= chatStringLen)
 					DieWithError("sendto() sent a different number of bytes than expected");
 				printf("%s: %s", usernames[0], chatBuffer); /* new line character should already be in chatBuffer */
 			}
