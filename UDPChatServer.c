@@ -15,6 +15,7 @@
 #define USERMAX 32	/* Longest string to use as username */
 
 void DieWithError(char *errorMessage);	/* Error handling function */
+void forwardFile(char *fileName, int sock, (struct sockaddr *) clntAddr1, (struct sockaddr *) clntAddr2); /* file forwarding function */
 
 int main(int argc, char *argv[])
 {
@@ -35,6 +36,7 @@ int main(int argc, char *argv[])
 	char* usernames[3]; //[USERMAX+1];	/*array pointers to all usernames*/
 	char USERNAMES[3][USERMAX+1];		/*array of usernames */
 	int dontSend0, dontSend1, dontSend2;
+	char *fileName;
 
 	if ( argc != 2 ) /* test for the correct number of arguments */
 	{
@@ -111,96 +113,134 @@ int main(int argc, char *argv[])
 			strcpy(sendBuffer, senderUsername); /* place username of sender at the beginning of message */
 			strcat(sendBuffer, "\n"); /* add a newline character */
 			chatMessage = strtok(chatBuffer, " "); /* A pointer to the first part of the message */
-			/* If the first part of the message is a username, we only want to send to that user */
-			if( usernames[0] && !strcmp(chatMessage, usernames[0]) ) /* only want to send to usernames[0] */
-			{
-				printf("Detected private message for user0\n");
-				dontSend0 = 0;
-				dontSend1 = 1;
-				dontSend2 = 1;
-			}
-			else if( usernames[1] && !strcmp(chatMessage, usernames[1]) ) /* only want to send to usernames[1] */
-			{
-				printf("Detected private message for user1\n");
-				dontSend0 = 1;
-				dontSend1 = 0;
-				dontSend2 = 1;
-			}
-			else if( usernames[2] && !strcmp(chatMessage, usernames[2]) ) /* only want to send to usernames[2] */
-			{
-				printf("Detected private message for user2\n");
-				dontSend0 = 1;
-				dontSend1 = 1;
-				dontSend2 = 0;
-			}
-			else  /*first part of message is not a username, send to all*/
-			{
-				dontSend0 = 0;
-				dontSend1 = 0;
-				dontSend2 = 0;
-				strcat(sendBuffer, chatMessage); /* the first part of the message is not a username */
-				strcat(sendBuffer, " ");	 /* so we add that back into message with a space */
-			}
-			chatMessage = strtok(NULL, ""); /* grab the rest of the message*/
-			if (chatMessage) {
-				strcat(sendBuffer, chatMessage); /* place message in send buffer */
-			}
-			sendBuffer[USERMAX+MSGMAX+2] = '\0';
-			printf("Sending message '%s' to client(s)....\n", sendBuffer);
-			/* Send Message */
-			if ( usernames[0] && !strcmp(senderUsername, usernames[0]) ) /*message from first user*/
-			{
-				if(usernames[1] && !dontSend1) /* Send to second user if valid */
+			if( !strcmp(chatMesssage, "fileTransfer") ) { /*check if chatMessage is a fileTransfer */
+				fileName = strtok(NULL, " ");
+				if( usernames[0] && !strcmp(senderUsername, usernames[0]) ) 
 				{
-					if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr1, sizeof(chatClntAddr1)) <0)
-						DieWithError("sendto() failed for usernames[0] to usernames[1].");
-					printf("     Sent to %s\n", usernames[1]);
+					/* from clnt 0 */
+					if( usernames[1] )
+						if( sendto(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)chatClntAddr1, sizeof(chatClntAddr1) )!= sizeof(chatBuffer) )
+							DieWithError("failed to forward file fileTransfer message");
+					if( usernames[2] )
+						if( sendto(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)chatClntAddr2, sizeof(chatClntAddr2) )!= sizeof(chatBuffer) )
+							DieWithError("failed to forward file fileTransfer message");
+					forwardFile(fileName, sock, chatClntAddr1, chatClntAddr2);
 				}
-				if(usernames[2] && !dontSend2) /* Send to third user if valid */
+				else if( usernames[1] && !strcmp(sendUsername, usernames[1]) ) 
 				{
-					if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr2, sizeof(chatClntAddr2)) <0)
-						DieWithError("sendto() failed for usernames[0] to usernames[2].");
-					printf("    Sent to %s\n", usernames[2]);
+					/* from clnt 1 */
+					if( usernames[0] )
+						if( sendto(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)chatClntAddr0, sizeof(chatClntAddr0) )!= sizeof(chatBuffer) )
+							DieWithError("failed to forward file fileTransfer message");
+					if( usernames[2] )
+						if( sendto(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)chatClntAddr2, sizeof(chatClntAddr2) )!= sizeof(chatBuffer) )
+							DieWithError("failed to forward file fileTransfer message");
+					forwardFile(fileName, sock, chatClntAddr0, chatClntAddr2);
+				}
+				else if ( usernames[2] && !strcmp(senderUsername, usernames[2]) ) 
+				{
+					/* from clnt 2 */
+					if( usernames[0] )
+						if( sendto(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)chatClntAddr0, sizeof(chatClntAddr0) )!= sizeof(chatBuffer) )
+							DieWithError("failed to forward file fileTransfer message");
+					if( usernames[1] )
+						if( sendto(sock, chatBuffer, sizeof(chatBuffer), 0, (struct sockaddr *)chatClntAddr1, sizeof(chatClntAddr1) )!= sizeof(chatBuffer) )
+							DieWithError("failed to forward file fileTransfer message");
+					forwardFile(fileName, sock, chatClntAddr0, chatClntAddr1);
+				}	
+			}
+			else {
+				/* If the first part of the message is a username, we only want to send to that user */
+				if( usernames[0] && !strcmp(chatMessage, usernames[0]) ) /* only want to send to usernames[0] */
+				{
+					printf("Detected private message for user0\n");
+					dontSend0 = 0;
+					dontSend1 = 1;
+					dontSend2 = 1;
+				}
+				else if( usernames[1] && !strcmp(chatMessage, usernames[1]) ) /* only want to send to usernames[1] */
+				{
+					printf("Detected private message for user1\n");
+					dontSend0 = 1;
+					dontSend1 = 0;
+					dontSend2 = 1;
+				}
+				else if( usernames[2] && !strcmp(chatMessage, usernames[2]) ) /* only want to send to usernames[2] */
+				{
+					printf("Detected private message for user2\n");
+					dontSend0 = 1;
+					dontSend1 = 1;
+					dontSend2 = 0;
+				}
+				else  /*first part of message is not a username, send to all*/
+				{
+					dontSend0 = 0;
+					dontSend1 = 0;
+					dontSend2 = 0;
+					strcat(sendBuffer, chatMessage); /* the first part of the message is not a username */
+					strcat(sendBuffer, " ");	 /* so we add that back into message with a space */
+				}
+				chatMessage = strtok(NULL, ""); /* grab the rest of the message*/
+				if (chatMessage) {
+					strcat(sendBuffer, chatMessage); /* place message in send buffer */
+				}
+				sendBuffer[USERMAX+MSGMAX+2] = '\0';
+				printf("Sending message '%s' to client(s)....\n", sendBuffer);
+				/* Send Message */
+				if ( usernames[0] && !strcmp(senderUsername, usernames[0]) ) /*message from first user*/
+				{
+					if(usernames[1] && !dontSend1) /* Send to second user if valid */
+					{
+						if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr1, sizeof(chatClntAddr1)) <0)
+							DieWithError("sendto() failed for usernames[0] to usernames[1].");
+						printf("     Sent to %s\n", usernames[1]);
+					}
+					if(usernames[2] && !dontSend2) /* Send to third user if valid */
+					{
+						if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr2, sizeof(chatClntAddr2)) <0)
+							DieWithError("sendto() failed for usernames[0] to usernames[2].");
+						printf("    Sent to %s\n", usernames[2]);
+	
+					}
+				}
+				else if( usernames[1] && !strcmp(senderUsername, usernames[1] )) /* message from second user */
+				{
+					if(usernames[0] && !dontSend0) /* Send to second user if valid */
+					{
+						if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr0, sizeof(chatClntAddr0)) <0)
+							DieWithError("sendto() failed for usernames[1] to usernames[0].");
+						printf("    Sent to %s\n", usernames[0]);
 
-				}
-			}
-			else if( usernames[1] && !strcmp(senderUsername, usernames[1] )) /* message from second user */
-			{
-				if(usernames[0] && !dontSend0) /* Send to second user if valid */
-				{
-					if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr0, sizeof(chatClntAddr0)) <0)
-						DieWithError("sendto() failed for usernames[1] to usernames[0].");
-					printf("    Sent to %s\n", usernames[0]);
+					}
+					if(usernames[2] && !dontSend2) /* Send to third user if valid */
+					{
+						if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr2, sizeof(chatClntAddr2)) <0)
+							DieWithError("sendto() failed for usernames[1] to usernames[2].");
+						printf("    Sent to %s\n", usernames[2]);
 
+					}
 				}
-				if(usernames[2] && !dontSend2) /* Send to third user if valid */
+				else if( usernames[2] && !strcmp(senderUsername, usernames[2] )) /* message from third user */
 				{
-					if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr2, sizeof(chatClntAddr2)) <0)
-						DieWithError("sendto() failed for usernames[1] to usernames[2].");
-					printf("    Sent to %s\n", usernames[2]);
-
+					if(usernames[0] && !dontSend0) /* Send to second user if valid */
+					{
+						if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr0, sizeof(chatClntAddr0)) <0)
+							DieWithError("sendto() failed for usernames[2] to usernames[0].");
+						printf("    Sent to %s\n", usernames[0]);
+	
+					}
+					if(usernames[1] && !dontSend1) /* Send to third user if valid */
+					{
+						if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr1, sizeof(chatClntAddr1)) <0)
+							DieWithError("sendto() failed for usernames[2] to usernames[1].");
+						printf("    Sent to %s\n", usernames[1]);
+	
+					}
 				}
-			}
-			else if( usernames[2] && !strcmp(senderUsername, usernames[2] )) /* message from third user */
-			{
-				if(usernames[0] && !dontSend0) /* Send to second user if valid */
+				else /* There is nobody to send the message to, server can discard */
 				{
-					if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr0, sizeof(chatClntAddr0)) <0)
-						DieWithError("sendto() failed for usernames[2] to usernames[0].");
-					printf("    Sent to %s\n", usernames[0]);
-
+					printf("    Nobody to send to.\n");
 				}
-				if(usernames[1] && !dontSend1) /* Send to third user if valid */
-				{
-					if( sendto(sock, sendBuffer, USERMAX+MSGMAX+1, 0, (struct sockaddr *)&chatClntAddr1, sizeof(chatClntAddr1)) <0)
-						DieWithError("sendto() failed for usernames[2] to usernames[1].");
-					printf("    Sent to %s\n", usernames[1]);
-
-				}
-			}
-			else /* There is nobody to send the message to, server can discard */
-			{
-				printf("    Nobody to send to.\n");
 			}
 
 		}
